@@ -8,6 +8,15 @@ let spec ~ocaml ~opam ~deps ppxlib_pin =
   let ppxlib_hash = Git.Commit.hash ppxlib_pin in
   let repo = Git.Commit.id ppxlib_pin |> Git.Commit_id.repo in
   let ppxlib_pin = Fmt.str "git+%s#%s" repo ppxlib_hash in
+  (* Update DEPS to have ppxlib.dev *)
+  let deps =
+    List.map
+      (fun dep ->
+        match Astring.String.find_sub ~sub:"ppxlib." dep with
+        | Some _ -> "ppxlib.dev"
+        | _ -> dep)
+      deps
+  in
   stage ~from
     [
       comment "Use opam version 2.1";
@@ -20,11 +29,11 @@ let spec ~ocaml ~opam ~deps ppxlib_pin =
          master) && git reset -q --hard %s && git log --no-decorate -n1 \
          --oneline && opam update -u"
         opam opam;
+      comment "Pin PPXLIB";
+      run "opam pin -yn %s --with-version=dev" ppxlib_pin;
       comment "Install the dependencies of the ppx";
       env "DEPS" (String.concat " " deps);
       run ~network:[ "host" ] "opam install $DEPS";
-      run "opam pin -yn %s --with-version=dev" ppxlib_pin;
-      run "opam install ppxlib -y";
       comment "Copy in the checkout of the ppx";
       copy [ "." ] ~dst:".";
       run "opam exec -- dune build @runtest @install @check";
