@@ -1,0 +1,5 @@
+(data_only_dirs github_com var)
+
+(mdx
+ (files README.md)
+ (deps %{bin:ppxlib-ci} docs/config.yaml))

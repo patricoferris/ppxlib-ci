@@ -1,0 +1,15 @@
+(library
+ (name ppxlib_ci)
+ (preprocess
+  (pps ppx_deriving_yaml ppx_deriving_yojson))
+ (libraries
+  obuilder-spec
+  ocaml-version
+  tar.gz
+  solver-worker
+  tar-unix
+  solver-service-api
+  current
+  current_web
+  current_docker
+  current_github))

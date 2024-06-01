@@ -1,0 +1,5 @@
+(executable
+ (name main)
+ (package ppxlib-ci)
+ (public_name ppxlib-ci)
+ (libraries cmdliner ppxlib_ci logs.cli fmt.tty fmt.cli logs.fmt))
