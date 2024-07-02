@@ -45,4 +45,9 @@ let ppx_to_yaml s =
       | _ -> failwith "Failed to reconstruct Github URL for ppx")
   | _ -> ppx_to_yaml s
 
-type t = { ppxlibs : ppxlibs; ppxes : ppx list } [@@deriving yaml]
+type t = {
+  ppxlibs : ppxlibs;
+  ppxes : ppx list;
+  revdeps : bool; [@default false]
+}
+[@@deriving yaml]

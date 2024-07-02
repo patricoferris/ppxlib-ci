@@ -44,7 +44,7 @@ type mode = Docker_local | Obuilder_local
 type t = {
   opam : Git.Commit.t Current.t;
   ocaml : Current_docker.Default.Image.t Current.t;
-  ppxlib_pin : Git.Commit.t Current.t;
+  source : [ `Pin of Git.Commit.t Current.t | `Package of string ];
 }
 
 let maybe_add_dev ~dir name =
@@ -70,10 +70,9 @@ let rec get_root_opam_packages = function
   | (dir, _, pkgs) :: _ when Fpath.is_current_dir dir -> pkgs
   | _ :: rest -> get_root_opam_packages rest
 
-let build ?(mode = Docker_local) ~pool ~ppx ~solver
-    { opam; ocaml; ppxlib_pin = pin } =
-  match mode with
-  | Docker_local ->
+let build ?(mode = Docker_local) ~pool ~ppx ~solver package =
+  match mode, package with
+  | Docker_local, `Pin { opam; ocaml; ppxlib_pin = pin } ->
       let open Current.Syntax in
       let obuilder_spec =
         let src = Repo_content.extract ppx in
@@ -105,3 +104,4 @@ let build ?(mode = Docker_local) ~pool ~ppx ~solver
       Docker.build ~pull:false ~pool ~dockerfile (`Git ppx)
       |> Current.ignore_value
   | _ -> failwith "Unknown build mode"
+

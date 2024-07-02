@@ -29,6 +29,7 @@ let pipeline (config : Config.t) =
     in
     List.map fetch ppx.branches
   in
+  let revdeps = Revdep.revdeps ~package:"ppxlib" opam in
   let build_ppx ppxlib_pin (ppx : Config.ppx) =
     List.map
       (fun (value, ppx) ->
@@ -60,4 +61,4 @@ let pipeline (config : Config.t) =
           |> Current.all))
       (ppxlib_sources config.ppxlibs)
   in
-  builds |> Current.all
+  (Current.ignore_value revdeps) :: builds |> Current.all

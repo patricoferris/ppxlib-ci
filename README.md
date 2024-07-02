@@ -3,6 +3,8 @@ ppxlib-ci
 
 A CI system for testing `ppxlib` and its reverse dependencies.
 
+The core of the CI could be refactored to test any package and its reverse dependencies.
+
 The CI requires a configuration file to run that explains how to test packages
 along with the packages to test.
 
