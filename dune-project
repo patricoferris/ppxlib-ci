@@ -8,6 +8,8 @@
   (name ppxlib-ci)
   (depends
     ppx_deriving_yaml
+    obuilder-spec
+    tar-unix
     current
     current_git
     current_web
