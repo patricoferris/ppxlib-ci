@@ -30,6 +30,7 @@ module Content = struct
     opam_files : string list;
     root_pkgs : (string * string) list;
     pinned_pkgs : (string * string) list;
+    from_checkout : bool;
   }
   [@@deriving yojson]
 
@@ -169,7 +170,8 @@ module Content = struct
     >>= fun () ->
     Lwt_preemptive.detach fold_on_opam_files () >>!= fun opam_files ->
     get_all_pinned_pkgs job opam_files root >>!= fun (root_pkgs, pinned_pkgs) ->
-    Lwt_result.return { root_pkgs; pinned_pkgs; opam_files }
+    Lwt_result.return
+      { root_pkgs; pinned_pkgs; opam_files; from_checkout = true }
 end
 
 module Extract = struct
@@ -178,22 +180,45 @@ module Extract = struct
   type t = No_context
 
   module Key = struct
-    type t = Commit.t
+    type commit = Commit.t
 
-    let digest t = Commit.hash t
+    let commit_to_yojson t = `String (Commit.marshal t)
+
+    let commit_of_yojson = function
+      | `String s -> Ok (Commit.unmarshal s)
+      | _ -> Error "Failed to unmarshal commit for repo_content"
+
+    type t = Git of commit | Pkg of string * string
+    (* package name and opam file contents *) [@@deriving yojson]
+
+    let digest = function
+      | Git t -> Commit.hash t
+      | Pkg (_v, t) -> Digest.string t
   end
 
-  module Value = struct
-    type t = Commit.t
-
-    let digest t = Commit.hash t
-  end
-
+  module Value = Key
   module Outcome = Content
 
   let run _ job _ src =
     Current.Job.start job ~pool ~level:Current.Level.Harmless >>= fun () ->
-    Current_git.with_checkout ~job src @@ fun src -> Content.of_dir ~job src
+    match src with
+    | Value.Pkg (pkg, opam) ->
+        Logs.info (fun f -> f "Extracted package directly %s" pkg);
+        let fake_opam_file =
+          match Astring.String.cut ~sep:"." pkg with
+          | Some (pkg, _) -> pkg ^ ".opam"
+          | None -> pkg ^ ".opam"
+        in
+        Lwt.return_ok
+          Content.
+            {
+              opam_files = [ fake_opam_file ];
+              root_pkgs = [ (pkg, opam) ];
+              pinned_pkgs = [];
+              from_checkout = false;
+            }
+    | Value.Git src ->
+        Current_git.with_checkout ~job src @@ fun src -> Content.of_dir ~job src
 
   let pp f _ = Fmt.pf f "Extract"
   let auto_cancel = true

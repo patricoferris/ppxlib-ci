@@ -1,7 +1,7 @@
 (library
  (name ppxlib_ci)
  (preprocess
-  (pps ppx_deriving_yaml ppx_deriving_yojson))
+  (pps ppx_deriving.std ppx_deriving_yaml ppx_deriving_yojson))
  (libraries
   obuilder-spec
   ocaml-version

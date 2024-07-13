@@ -5,10 +5,8 @@ ppxlibs:
 
 ppxes:
   - "janestreet/ppx_sexp_conv#master"
-  - "ocaml-ppx/ppx_deriving#master"
   - url: https://github.com/patricoferris/ppx_deriving_yaml.git
     extras: true
     branches:
       - main
-      - ppxlib-ci
 

@@ -149,7 +149,7 @@ let read_opam_file ~tarball ~prefix pkg =
   let rec find opam_file' tgz =
     Lwt.catch
       (fun () ->
-        Tgz.get_next_header tgz >>= fun hdr ->
+        Tgz.get_next_header ~global:None tgz >>= fun (hdr, _) ->
         if hdr.Tar.Header.file_name = opam_filename then
           read tgz hdr >|= fun opam_file -> Some opam_file
         else

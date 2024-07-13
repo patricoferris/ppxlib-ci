@@ -1,4 +1,4 @@
-let program_name = "ppxlib-ci"
+let program_name = "revdeps-ci"
 
 let to_string_err = function
   | Ok v -> Ok v
@@ -11,6 +11,17 @@ let check_config () =
   |> Result.map (fun _ -> Fmt.pr "%s%!" (Yaml.to_string_exn yaml))
   |> to_string_err
 
+let routes ~engine =
+  let open Routes in
+  [
+    route nil Web.homepage;
+    route
+      (s "package" / str / str /? nil)
+      (fun owner repo -> Web.package ~owner ~repo);
+    route (s "revdeps" /? nil) Web.revdeps;
+  ]
+  @ Current_web.routes engine
+
 let main () config mode ppxlib_ci_config =
   let conf = In_channel.with_open_bin ppxlib_ci_config In_channel.input_all in
   let yaml = Yaml.of_string_exn conf in
@@ -19,9 +30,7 @@ let main () config mode ppxlib_ci_config =
     Current.Engine.create ~config (fun () -> Ppxlib_ci.pipeline ppx_conf)
   in
   let site =
-    Current_web.Site.(v ~has_role:allow_all)
-      ~name:program_name
-      (Current_web.routes engine)
+    Current_web.Site.(v ~has_role:allow_all) ~name:program_name (routes ~engine)
   in
   Lwt_main.run
     (Lwt.choose [ Current.Engine.thread engine; Current_web.run ~mode site ])
