@@ -41,7 +41,10 @@ let pipeline (config : Config.t) =
     in
     List.map fetch ppx.branches
   in
-  let revdeps = Revdep.revdeps ~package:"ppxlib" opam in
+  let revdeps =
+    Revdep.revdeps ~disable_upstream:config.disable_upstream ~package:"ppxlib"
+      opam
+  in
   let build_ppx source ppx =
     let build_ctx = Build.{ opam; ocaml; source; jane } in
     match ppx with

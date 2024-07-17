@@ -49,5 +49,6 @@ type t = {
   ppxlibs : ppxlibs;
   ppxes : ppx list;
   revdeps : bool; [@default false]
+  disable_upstream : bool; [@default false]
 }
 [@@deriving yaml]

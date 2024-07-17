@@ -156,22 +156,29 @@ let revdeps =
       let package = Current_git.Commit_id.v ~repo ~gref ~hash in
       Logs.info (fun f -> f "Digest: %s" (Git.Commit_id.digest package));
       let revdeps = Ppxlib_ci.Index.list_rev_deps package in
-      let add_to_map (up, op) builds k (v, id, status) = match v with
-        | Ppxlib_ci.Index.Git _ -> (Revdeps_map.add k ((v, id, status) :: builds) up, op)
+      let add_to_map (up, op) builds k (v, id, status) =
+        match v with
+        | Ppxlib_ci.Index.Git _ ->
+            (Revdeps_map.add k ((v, id, status) :: builds) up, op)
         | Pkg _ -> (up, Revdeps_map.add k ((v, id, status) :: builds) op)
       in
       let upstream_map, opam_map =
         List.fold_left
           (fun ((up, op) as acc) (v, id, status) ->
             let v_string = Ppxlib_ci.Index.revdep_to_string v in
-            match Revdeps_map.find_opt v_string up, Revdeps_map.find_opt v_string op with
+            match
+              ( Revdeps_map.find_opt v_string up,
+                Revdeps_map.find_opt v_string op )
+            with
             | Some builds, None -> add_to_map acc builds v_string (v, id, status)
             | None, Some builds -> add_to_map acc builds v_string (v, id, status)
             | None, None -> add_to_map acc [] v_string (v, id, status)
-            | _ -> 
-                Logs.warn (fun f -> f "Package identifical in upstream and opam");
+            | _ ->
+                Logs.warn (fun f ->
+                    f "Package identifical in upstream and opam");
                 (up, op))
-          (Revdeps_map.empty, Revdeps_map.empty) revdeps
+          (Revdeps_map.empty, Revdeps_map.empty)
+          revdeps
       in
       let owner, repo = commit_to_owner_name package in
       Logs.info (fun f -> f "Revdeps CI: %s/%s" owner repo);
@@ -195,57 +202,60 @@ let revdeps =
                      "You are viewing %i reverse dependency builds for %s/%s"
                      (List.length revdeps) owner repo);
               ];
-              rest
-          ]   
+            rest;
+          ]
       in
-      let render_map title map = [
-            El.h4 [ El.txt title ];
-            El.hr();
-            El.ul
-              (List.map
-                 (fun (_repo, builds) ->
-                   let owner, repo =
-                     match List.hd builds |> fun (v, _, _) -> v with
-                     | Ppxlib_ci.Index.Git git ->
-                         commit_to_owner_name (Git.Commit.id git)
-                     | Pkg (pkg, _) -> (pkg, ":opam-repository")
-                   in
-                   El.li
-                     [
-                       El.txt (Fmt.str "%s/%s" owner repo); 
-                       El.ul
-                         (List.map
-                            (fun (v, id, status) ->
-                              match v with
-                              | Ppxlib_ci.Index.Pkg (pkg, _) ->
-                                  El.li [ El.txt pkg ]
-                              | Ppxlib_ci.Index.Git git ->
-                                  let v = Git.Commit.id git in
-                                  El.li
-                                    [
-                                      (match id with
-                                      | Some id ->
-                                          text_ref ~href:(Fmt.str "job/%s" id)
-                                            (Git.Commit_id.gref v)
-                                      | None -> El.txt (Git.Commit_id.gref v));
-                                      El.nbsp;
-                                      status_to_element status;
-                                      El.span
-                                        ~at:[ At.style "color: grey" ]
-                                        [
-                                          El.txt
-                                            (Fmt.str "   (%s)"
-                                               (Git.Commit_id.hash v));
-                                        ];
-                                    ])
-                            builds);
-                     ])
-                 (Revdeps_map.to_list map))
-            ] in
+      let render_map title map =
+        [
+          El.h4 [ El.txt title ];
+          El.hr ();
+          El.ul
+            (List.map
+               (fun (_repo, builds) ->
+                 let owner, repo =
+                   match List.hd builds |> fun (v, _, _) -> v with
+                   | Ppxlib_ci.Index.Git git ->
+                       commit_to_owner_name (Git.Commit.id git)
+                   | Pkg (pkg, _) -> (pkg, ":opam-repository")
+                 in
+                 El.li
+                   [
+                     El.txt (Fmt.str "%s/%s" owner repo);
+                     El.ul
+                       (List.map
+                          (fun (v, id, status) ->
+                            match v with
+                            | Ppxlib_ci.Index.Pkg (pkg, _) ->
+                                El.li [ El.txt pkg ]
+                            | Ppxlib_ci.Index.Git git ->
+                                let v = Git.Commit.id git in
+                                El.li
+                                  [
+                                    (match id with
+                                    | Some id ->
+                                        text_ref ~href:(Fmt.str "job/%s" id)
+                                          (Git.Commit_id.gref v)
+                                    | None -> El.txt (Git.Commit_id.gref v));
+                                    El.nbsp;
+                                    status_to_element status;
+                                    El.span
+                                      ~at:[ At.style "color: grey" ]
+                                      [
+                                        El.txt
+                                          (Fmt.str "   (%s)"
+                                             (Git.Commit_id.hash v));
+                                      ];
+                                  ])
+                          builds);
+                   ])
+               (Revdeps_map.to_list map));
+        ]
+      in
       let ups = render_map "Upstream" upstream_map in
       let opam = render_map "Opam" opam_map in
       let html =
-        Template.template "revdeps-ci" (page (El.div (ups @ opam))) |> El.to_string ~doctype:true
+        Template.template "revdeps-ci" (page (El.div (ups @ opam)))
+        |> El.to_string ~doctype:true
       in
       Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:html ()
   end

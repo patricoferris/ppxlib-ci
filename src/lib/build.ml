@@ -44,7 +44,7 @@ let spec ~ocaml ~opam ~deps ~package_pin ~package_name ~root_pkgs ~from_checkout
       (* If from_checkout is false, then we're doing a more normal revdeps
          check, similar to opam-repo-ci and in this case there should only be
          a single root_pkg with a version number *)
-      let rootpkg, rootpkg_version =
+      let rootpkg, _rootpkg_version =
         match root_pkgs with
         | [ pkg ] -> (
             match Astring.String.cut ~sep:"." pkg with
@@ -53,7 +53,8 @@ let spec ~ocaml ~opam ~deps ~package_pin ~package_name ~root_pkgs ~from_checkout
         | _ -> failwith "Expected one package for a non-checkout build"
       in
       [
-        run "opam pin add -k version -yn %s %s" rootpkg rootpkg_version;
+        (* run "opam pin add -k version -yn %s %s" rootpkg rootpkg_version; *)
+        env "DEPS" (String.concat " " deps);
         run ~network:[ "host" ]
           "opam update --depexts && opam install --cli=2.1 --depext-only -y \
            $DEPS";
@@ -134,18 +135,31 @@ let build ?(mode = Docker_local) ~pool ~revdep ~solver
         and+ analysis = analysis
         and+ package_pin = source in
         let selection = List.hd analysis.Solve.Analysis.selections in
-        let groups = group_opam_files analysis.opam_files in
-        let root_pkgs = get_root_opam_packages groups in
-        let deps =
-          selection.packages
-          |> List.filter (fun pkg ->
-                 (not (List.mem pkg root_pkgs))
-                 && not
-                      (Astring.String.take ~rev:true ~sat:(( <> ) '.') pkg
-                      |> String.equal "opam"))
-        in
-        spec ~ocaml ~opam ~deps ~package_pin ~package_name:"ppxlib" ~root_pkgs
-          ~from_checkout:analysis.src_content.from_checkout
+        let normal_opam_install = not analysis.src_content.from_checkout in
+        if normal_opam_install then
+          let deps =
+            selection.packages
+            |> List.filter (fun pkg ->
+                   not
+                     (Astring.String.take ~rev:true ~sat:(( <> ) '.') pkg
+                     |> String.equal "opam"))
+          in
+          spec ~ocaml ~opam ~deps ~package_pin ~package_name:"ppxlib"
+            ~root_pkgs:(List.map fst analysis.src_content.root_pkgs)
+            ~from_checkout:analysis.src_content.from_checkout
+        else
+          let groups = group_opam_files analysis.opam_files in
+          let root_pkgs = get_root_opam_packages groups in
+          let deps =
+            selection.packages
+            |> List.filter (fun pkg ->
+                   (not (List.mem pkg root_pkgs))
+                   && not
+                        (Astring.String.take ~rev:true ~sat:(( <> ) '.') pkg
+                        |> String.equal "opam"))
+          in
+          spec ~ocaml ~opam ~deps ~package_pin ~package_name:"ppxlib" ~root_pkgs
+            ~from_checkout:analysis.src_content.from_checkout
       in
       let dockerfile =
         let+ obuilder_spec = obuilder_spec in
