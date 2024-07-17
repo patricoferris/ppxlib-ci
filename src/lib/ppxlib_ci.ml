@@ -2,6 +2,7 @@ module Docker = Current_docker
 module Git = Current_git
 module Github = Current_github
 module Config = Config
+module Index = Index
 
 let ppxlib_pin_to_url s =
   match Astring.String.cut ~sep:"/" s with
@@ -20,23 +21,39 @@ let pipeline (config : Config.t) =
     Git.clone ~schedule:weekly ~gref:"master"
       "https://github.com/ocaml/opam-repository.git"
   in
-  let ocaml = Docker.Default.pull ~schedule:weekly "ocaml/opam" in
+  let jane =
+    Git.clone ~schedule:weekly ~gref:"master"
+      "https://github.com/janestreet/opam-repository.git"
+  in
+  let ocaml =
+    Docker.Default.pull ~schedule:weekly "ocaml/opam:debian-12-ocaml-5.1"
+  in
   let solver = Solver_worker.Solver_request.create ~n_workers:1 () in
   let sources (ppx : Config.ppx) =
     let org_repo = Uri.of_string ppx.url |> Uri.path in
     let fetch branch =
-      (org_repo ^ "-" ^ branch, Git.clone ~schedule:weekly ~gref:branch ppx.url)
+      let open Current.Syntax in
+      let k =
+        let+ git = Git.clone ~schedule:weekly ~gref:branch ppx.url in
+        Repo_content.Extract.Key.Git git
+      in
+      (org_repo ^ "-" ^ branch, k)
     in
     List.map fetch ppx.branches
   in
-  let build_ppx ppxlib_pin (ppx : Config.ppx) =
-    List.map
-      (fun (value, ppx) ->
-        let build_ctx = Build.{ opam; ocaml; ppxlib_pin } in
-        Current.collapse ~input:ppx ~key:"ppx" ~value
-        @@ Build.build ~solver ~pool ~ppx build_ctx)
-      (sources ppx)
-    |> Current.all
+  let revdeps =
+    Revdep.revdeps ~disable_upstream:config.disable_upstream ~package:"ppxlib"
+      opam
+  in
+  let build_ppx source ppx =
+    let build_ctx = Build.{ opam; ocaml; source; jane } in
+    match ppx with
+    | `Custom (ppx : Config.ppx) ->
+        List.map
+          (fun (_value, revdep) -> Build.build ~solver ~pool ~revdep build_ctx)
+          (sources ppx)
+        |> Current.all
+    | `Package pkg -> Build.build ~solver ~pool ~revdep:pkg build_ctx
   in
   let ppxlib_pins (ppxlibs : Config.ppxlibs) =
     let main = ppxlibs.main |> ppxlib_pin_to_url in
@@ -54,10 +71,21 @@ let pipeline (config : Config.t) =
   in
   let builds =
     List.map
-      (fun (value, ppxlib) ->
-        Current.collapse ~input:ppxlib ~key:"ppxlib" ~value
-          (List.map (fun ppx -> build_ppx ppxlib ppx) config.ppxes
-          |> Current.all))
+      (fun (_value, ppxlib) ->
+        List.map
+          (fun ppx -> build_ppx ppxlib ppx)
+          (List.map (fun v -> `Custom v) config.ppxes)
+        |> Current.all)
       (ppxlib_sources config.ppxlibs)
   in
-  builds |> Current.all
+  let revdeps_builds =
+    let open Current.Syntax in
+    let* revdeps = revdeps in
+    List.map
+      (fun (_value, ppxlib) ->
+        List.map (build_ppx ppxlib) (List.map (fun v -> `Package v) revdeps)
+        |> Current.all)
+      (ppxlib_sources config.ppxlibs)
+    |> Current.all
+  in
+  revdeps_builds :: builds |> Current.all
